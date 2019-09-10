@@ -1,4 +1,4 @@
-<?=$this->Form->create($post, array('url' => array('action' => $action), 'type' => 'file')) ?>
+<?=$this->Form->create($data, array('url' => array('action' => $action), 'type' => 'file')) ?>
 <fieldset>
 	<?php
 		echo $this->Form->hidden('postId');

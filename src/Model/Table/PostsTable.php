@@ -86,12 +86,18 @@ class PostsTable extends Table
 
         $validator
             ->scalar('img_ext')
-            ->maxLength('img_ext', 255)
-            ->allowEmptyString('img_ext');
+            ->add('img_ext', ['list' => [
+                'rule' => ['inList', ['jpg', 'png', 'gif']],
+                'message' => 'Only jpg, png, gif file that you can update.'
+            ]])
+            ->allowEmpty('img_ext');
 
         $validator
             ->integer('img_size')
-            ->allowEmptyString('img_size');
+            ->allowEmpty('img_size')
+            ->add('img_size', 'comparison', [
+                'rule' => ['comparison', '<', 10485760],
+                'message' => 'The attachment size exceeds the allowable limit.(Max:10MB)']);
 
         return $validator;
     }

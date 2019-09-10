@@ -3,14 +3,22 @@ namespace App\Controller;
 
 use App\Controller\AppController;
 use Cake\Controller\Component;
+// for delete imgs
+use Cake\Filesystem\Folder;
+use Cake\Filesystem\File;
+
 
 class PostsController extends AppController
 {
     public $paginate = [
-        'limit' => 5,
-        'order' => [
-            'id' => 'DESC']
-    ];
+            'limit' => 5,
+            'order' => [
+                'id' => 'DESC']
+        ];
+    public $components = array(
+            'ImgProcess' => array()
+        );
+
     public function initialize() {
         parent::initialize();
         $this->loadComponent('Paginator');
@@ -19,6 +27,8 @@ class PostsController extends AppController
         $data = $this->paginate($this->Posts);
         $this->set('data', $data);
         $this->set('count', $data->count());
+        }
+
         // $query = $this->Posts->find()
         // ->where(['resId =' => 0])
         // ->order(['modified' => 'desc']);
@@ -46,18 +56,17 @@ class PostsController extends AppController
         //         ->count();
         //     }
         // $this->set(compact('posts','find','posts_cnt'));
-        }
 
 
 
     public function view($postId = null)
     {
         $new_post = $this->Posts->newEntity();
-        $posts = $this->Posts->find()
+        $data = $this->Posts->find()
         ->where(['postId =' => $postId])
         ->order(['resId' => 'asc']);
 
-        $this->set(compact('posts', 'new_post'));
+        $this->set(compact('data', 'new_post'));
         $this->set('_serialize', ['post']);
     }
 
@@ -68,26 +77,39 @@ class PostsController extends AppController
      */
     public function add()
     {
-        $post = $this->Posts->newEntity();
+        $data = $this->Posts->newEntity();
         if ($this->request->is('post')) {
-            $post = $this->Posts->patchEntity($post, $this->request->getData());
-            if ($post->postId == -1) {
-                $post->postId = $this->Posts->find()
+            if (!empty($this->request->data['img']['name'])) {
+                $this->ImgProcess->save($this->request);
+            }
+            $data = $this->Posts->patchEntity($data, $this->request->getData());
+            if ($data->postId == -1) {
+                $data->postId = $this->Posts->find()
                 ->order(['postId' => 'desc'])
                 ->select(['postId'])
                 ->first()['postId'] +1;
-                $post->resId = 0;
+                $data->resId = 0;
             }
-
-            if ($this->Posts->save($post)) {
+            if($data->name === '') $data->name = 'No name';
+            if ($this->Posts->save($data)) {
+                if (!empty($this->request->data['img']['name'])) {
+                    $this->ImgProcess->generate(
+                        $this->request->data['img']['tmp_name'], $data);
+                }
                 $this->Flash->success(__('The post has been saved.'));
-
-                return $this->redirect(['action' => 'index']);
+                if($data->resId === 0) return $this->redirect(['action' => 'index']);
+                else return $this->redirect($this->referer());
+            } else {
+                if ($data->errors()['img_ext'])
+                    $this->Flash->error(__($data->errors()['img_ext']['list']));
+                if ($data->errors()['img_size'])
+                    $this->Flash->error(__($data->errors()['img_size']['comparision']));
+                $this->Flash->error(__('The post could not be saved. Please, try again.'));
+                return $this->redirect($this->referer());
             }
-            $this->Flash->error(__('The post could not be saved. Please, try again.'));
         }
-        $this->set(compact('post'));
-        $this->set('_serialize', ['psot']);
+        $this->set(compact('data'));
+        $this->set('_serialize', ['data']);
     }
 
     /**
@@ -99,20 +121,20 @@ class PostsController extends AppController
      */
     public function edit($id = null)
     {
-        $post = $this->Posts->get($id, [
+        $data = $this->Posts->get($id, [
             'contain' => []
         ]);
         if ($this->request->is(['patch', 'post', 'put'])) {
-            $post = $this->Posts->patchEntity($post, $this->request->getData());
-            if ($this->Posts->save($post)) {
+            $data = $this->Posts->patchEntity($data, $this->request->getData());
+            if ($this->Posts->save($data)) {
                 $this->Flash->success(__('The post has been saved.'));
 
                 return $this->redirect(['action' => 'index']);
             }
             $this->Flash->error(__('The post could not be saved. Please, try again.'));
         }
-        $this->set(compact('post'));
-        $this->set('_serialize', ['psot']);
+        $this->set(compact('data'));
+        $this->set('_serialize', ['data']);
     }
 
     public function delete($id = null)
@@ -120,20 +142,37 @@ class PostsController extends AppController
         $this->request->allowMethod(['post', 'delete']);
         $del_post = $this->Posts->get($id);
         if ($del_post->resId === 0) {
+            $query = $this->Posts->find()
+                ->where(['postId =' => $del_post->postId])
+                ->select(['img_name']);
+            $del_imgs = [];
+            foreach ($query as $q) array_push($del_imgs, $q->img_name);
             if ($this->Posts->deleteAll(array('postId' => $del_post->postId))) {
+                foreach ($del_imgs as $q) {
+                    $file = new File(WWW_ROOT.'img/'.$q);
+                    $file->delete();
+                    $file = new File(WWW_ROOT.'img/mini'.$q);
+                    $file->delete();
+                }
                 $this->Flash->success(__('The post has been deleted.'));
             } else {
                 $this->Flash->error(__('The post could not be deleted. Please, try again.'));
             }
             return $this->redirect(['action' => 'index']);
         } elseif ($this->Posts->delete($del_post)) {
+                    $file = new File(WWW_ROOT.'img/'.$q);
+                    $file->delete();
+                    $file = new File(WWW_ROOT.'img/mini'.$q);
+                    $file->delete();
             $this->Flash->success(__('The post has been deleted.'));
         } else {
             $this->Flash->error(__('The post could not be deleted. Please, try again.'));
         }
         return $this->redirect($this->referer());
     }
+
 }
+
     // public function find() {
         // $posts = [];
         // $find = 'Not searching';
